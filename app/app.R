@@ -19,6 +19,68 @@ invisible(suppressMessages(lapply(libs, library, character.only = T)))
 # Data 
 # -------------------------------------------------------------------
 
+# City of Chicago
+    # Import data API
+    url  = 'https://data.cityofchicago.org/resource/w98m-zvie.json'
+    req  = GET(URLencode(url))
+    cont = content(req, 'text')
+    json = gsub('NaN', 'NA', cont, perl = T)
+    df   = data.frame(jsonlite::fromJSON(json))
+    
+    # Data manipulation
+    df = 
+        df %>%
+        
+        # Choosing variables of interest 
+        select(date,
+               primary_type,
+               location_description,
+               arrest, domestic,
+               beat, district,
+               latitude, longitude) %>%
+        
+        # District as numeric
+        mutate(district = as.numeric(district)) %>%
+        
+        # Select primary type of crimes for maps
+        filter(
+            primary_type %in%
+                c('THEFT',
+                  'ASSAULT',
+                  'NARCOTICS',
+                  'CRIMINAL TRESPASS',
+                  'WEAPONS VIOLATION',
+                  'PUBLIC PEACE VIOLATION')) %>%
+        
+        # Generate categorical variable for chosen types
+        mutate(
+            crime_type = 
+                ifelse(primary_type == "THEFT", 1, 
+                ifelse(primary_type == "ASSAULT", 2, 
+                ifelse(primary_type == "NARCOTICS", 3, 
+                ifelse(primary_type == "CRIMINAL TRESPASS", 4, 
+                ifelse(primary_type == "WEAPONS VIOLATION", 5, 6)))))
+        )
+
+# Import Shapefiles
+    # Police beats
+    sh_beats = readOGR(dsn     = './data_shp', 
+                       layer   = 'police_beats',
+                       verbose = F)
+    
+    # Police districts
+    sh_distr = readOGR(dsn     = './data_shp', 
+                       layer   = 'police_district',
+                       verbose = F)
+    
+    # Data manipulation
+    # Variables `district` as numeric
+    sh_beats@data$district = as.numeric(sh_beats@data$district)
+    sh_distr@data$DIST_NUM = as.numeric(sh_distr@data$DIST_NUM)
+    
+    # Change name to `district` in sh_distr shapefile
+    colnames(sh_distr@data)[2] = 'district'
+
 # Other
 # -------------------------------------------------------------------
 
@@ -67,11 +129,6 @@ ui = navbarPage(
 
 server = function(input, output) {
     
-    output$map = renderLeaflet(
-        leaflet() %>%
-            addTiles() %>%
-            setView(lng = -87.70, lat = 41.82, zoom = 11)
-    )
 }
 
 # Run app
