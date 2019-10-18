@@ -210,6 +210,22 @@ server = function(input, output) {
                              stroke      = T)
     })
     
+    
+    # Tab - Data Explorer 
+    # ---------------------------------------------------------------
+    
+    # Data table
+    output$table1 = DT::renderDataTable({
+        DT::datatable(crimeInput(),
+                      options = list(pageLength = 10), 
+                      rownames = F)
+    })
+    
+    # Download
+    output$downloadData = downloadHandler(
+        filename = function() {paste("data-", Sys.Date(), ".csv", sep = "")},
+        content  = function(file) {write.csv(crimeInput(),file)}
+    )
 }
 
 # Run app
