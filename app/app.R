@@ -40,7 +40,10 @@ invisible(suppressMessages(lapply(libs, library, character.only = T)))
                latitude, longitude) %>%
         
         # District as numeric
-        mutate(district = as.numeric(district)) %>%
+        # `lon` and `lat` as numeric
+        mutate(district  = as.numeric(district),
+               latitude  = as.numeric(latitude),
+               longitude = as.numeric(longitude)) %>%
         
         # Select primary type of crimes for maps
         filter(
@@ -76,10 +79,7 @@ invisible(suppressMessages(lapply(libs, library, character.only = T)))
     # Data manipulation
     # Variables `district` as numeric
     sh_beats@data$district = as.numeric(sh_beats@data$district)
-    sh_distr@data$DIST_NUM = as.numeric(sh_distr@data$DIST_NUM)
-    
-    # Change name to `district` in sh_distr shapefile
-    colnames(sh_distr@data)[2] = 'district'
+    sh_distr@data$dist_num = as.numeric(sh_distr@data$dist_num)
 
 # Other
 # -------------------------------------------------------------------
@@ -90,13 +90,18 @@ absPanel = '#panelOpts {background-color: rgba(255,255,255, 0.7); padding: 0 20p
 # User interface 
 # -------------------------------------------------------------------
 ui = navbarPage(
-    "Crime in Chicago", 
+    "Crimes in Chicago 2019", 
     id = "nav",
     theme = shinytheme("flatly"),
     tabPanel(
+        # Interactive Map Options
         "Interactive Map",
         leafletOutput("map", width = "100%", height = 790),
+        
+        # Draggable Panel with input options and interactive plots
         absolutePanel(
+            
+            # Define options of absolute panel
             id        = "panelOpts",
             class     = "panel panel-default",
             draggable = T,
@@ -106,9 +111,36 @@ ui = navbarPage(
             right     = 30,
             width     = 310, height = "80%",
             
-            h4("Interactive Map"),
-            selectInput("input1", "Color", c(1,2,3)),
-            selectInput("input2", "Size", c(1,2,3)),
+            # Title for absolute panel
+            h3(strong("Interactive Map")),
+            br(),
+            
+            # Input options
+            # Crime type
+            radioButtons("input1", 
+                         h4(strong("Crime type")), 
+                         choices = 
+                             c('Theft' = 1,
+                               'Assault' = 2,
+                               'Narcotics' = 3,
+                               'Criminal trespassing' = 4,
+                               'Weapons violation' = 5,
+                               'Public peace violation' = 6), 
+                         selected = 1),
+            
+            br(),
+            
+            # Show only crimes with an arrest
+            checkboxInput("input2", 
+                          strong("Show only crimes with an arrest"), 
+                          value = T),
+            
+            # Show only domestic crimes
+            checkboxInput("input3",
+                         strong("Show only domestic crimes"),
+                         value = T),
+            
+            # Interactive plots
             plotlyOutput("plot1", height = 250),
             plotlyOutput("plot2", height = 250),
             
@@ -120,7 +152,13 @@ ui = navbarPage(
     ),
     tabPanel(
         "Data explorer",
-        DT::dataTableOutput("table1")
+        h5(strong(paste("Recent crimes in Chicago 2019"))),
+        hr(),
+        DT::dataTableOutput("table1"),
+        hr(),
+        h5(strong("Download data for selected variable:")),
+        downloadButton('downloadData',"Download data"), 
+        hr()
     )
 )
 
@@ -128,6 +166,49 @@ ui = navbarPage(
 # -------------------------------------------------------------------
 
 server = function(input, output) {
+    
+    # Tab - Interactive Map
+    # ---------------------------------------------------------------
+    
+    # Base map
+    output$map = renderLeaflet({
+        leaflet() %>% 
+            
+            setView(lng = -87.70, lat = 41.82, zoom = 11) %>%
+            
+            addProviderTiles("CartoDB.DarkMatterNoLabels"     , group = "World Dark") %>% 
+            addProviderTiles(provider = "Esri.WorldGrayCanvas", group = "World Gray") %>%
+            
+            addPolygons(data   = sh_distr, 
+                        color  = "#878B8E",
+                        fill   = F, 
+                        weight = 1.5) %>%
+            
+            addLayersControl(
+                baseGroups = c("World Dark","World Gray"),
+                position   = "bottomleft")
+    })
+    
+    # Data filter
+    crimeInput = reactive({
+        crime = 
+            df %>%
+            filter(!is.na(latitude),
+                   crime_type == input$input1)
+        return(crime)
+    })
+    
+    # Leaflet maps 
+    observe({
+        leafletProxy("map", data = crimeInput()) %>%
+            clearMarkers() %>% 
+            addCircleMarkers(lng         =~ longitude, 
+                             lat         =~ latitude, 
+                             fillOpacity = 1, 
+                             color       = "#00A6A6", 
+                             radius      = 3, 
+                             stroke      = T)
+    })
     
 }
 
