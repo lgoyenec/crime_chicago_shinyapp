@@ -7,11 +7,14 @@
 # -------------------------------------------------------------------
 
 # Define libraries
-libs = c("shiny", "shinythemes", "shinydashboard",             # dashboard
-         "leaflet", "leaflet.extras", "leaflet.minicharts",    # leaflet maps
-         "readxl",                                             # read csv 
-         "DT",                                                 # render data frames
-         "plotly")                                             # interactive viz      
+libs = c("shiny", "shinythemes", "shinydashboard", "shinyWidgets",  # dashboard
+         "leaflet", "leaflet.extras", "leaflet.minicharts",         # leaflet maps
+         "httr", "jsonlite",                                        # read json
+         "readxl",                                                  # read csv 
+         "rgdal",                                                   # read shapefiles
+         "stringr",                                                 # string case: upper, lower, title
+         "DT",                                                      # render data frames
+         "plotly")                                                  # interactive viz 
 
 # Attach libraries
 invisible(suppressMessages(lapply(libs, library, character.only = T)))
@@ -58,9 +61,9 @@ invisible(suppressMessages(lapply(libs, library, character.only = T)))
         # Generate categorical variable for chosen types
         mutate(
             crime_type = 
-                ifelse(primary_type == "THEFT", 1, 
-                ifelse(primary_type == "ASSAULT", 2, 
-                ifelse(primary_type == "NARCOTICS", 3, 
+                ifelse(primary_type == "THEFT",             1, 
+                ifelse(primary_type == "ASSAULT",           2, 
+                ifelse(primary_type == "NARCOTICS",         3, 
                 ifelse(primary_type == "CRIMINAL TRESPASS", 4, 
                 ifelse(primary_type == "WEAPONS VIOLATION", 5, 6)))))
         )
@@ -120,11 +123,11 @@ ui = navbarPage(
             radioButtons("input1", 
                          h4(strong("Crime type")), 
                          choices = 
-                             c('Theft' = 1,
-                               'Assault' = 2,
-                               'Narcotics' = 3,
-                               'Criminal trespassing' = 4,
-                               'Weapons violation' = 5,
+                             c('Theft'                  = 1,
+                               'Assault'                = 2,
+                               'Narcotics'              = 3,
+                               'Criminal trespassing'   = 4,
+                               'Weapons violation'      = 5,
                                'Public peace violation' = 6), 
                          selected = 1),
             
@@ -140,15 +143,23 @@ ui = navbarPage(
                          strong("Show only domestic crimes"),
                          value = T),
             
-            # Interactive plots
-            plotlyOutput("plot1", height = 250),
-            plotlyOutput("plot2", height = 250),
+            br(),
+            
+            # Interactive value box
+            fluidRow(useShinydashboard(),
+                     tags$head(tags$style(HTML(".small-box {height: 100px}"))),
+                     valueBoxOutput("vb1", width = 12)),
+            
+            fluidRow(useShinydashboard(),
+                     tags$head(tags$style(HTML(".small-box {height: 100px}"))),
+                     valueBoxOutput("vb2", width = 12)),
             
             fluidPage(tags$head(tags$style(HTML(absPanel))))
         )
     ),
     tabPanel(
-        "Statistics"
+        "Statistics",
+        plotlyOutput("plot1", height = 200)
     ),
     tabPanel(
         "Data explorer",
@@ -206,10 +217,32 @@ server = function(input, output) {
                              lat         =~ latitude, 
                              fillOpacity = 1, 
                              color       = "#00A6A6", 
-                             radius      = 3, 
+                             radius      = 4, 
                              stroke      = T)
     })
     
+    # Value box 
+    output$vb1 = renderValueBox({
+        value = crimeInput() %>% summarise(n = n()) %>% as.numeric()
+        text  = crimeInput() %>% select(primary_type) %>% unique() %>% as.character() %>% str_to_sentence()
+        valueBox(paste(value), subtitle = paste(text, "crimes"), color = "teal")
+    })
+    
+    output$vb2 = renderValueBox({
+        value = df %>% summarise(n = n()) %>% as.numeric()
+        valueBox(paste(value), subtitle = "Total crimes", color = "yellow")
+    })
+    
+    # Tab - Statistics
+    # ---------------------------------------------------------------
+    
+    # Plot 1
+    output$plot1 = renderPlotly({
+    })
+    
+    # Plot 2
+    output$plot2 = renderPlotly({
+    })
     
     # Tab - Data Explorer 
     # ---------------------------------------------------------------
