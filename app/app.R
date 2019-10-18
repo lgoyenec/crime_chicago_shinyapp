@@ -21,6 +21,10 @@ libs = c("shiny", "shinythemes", "shinydashboard", "shinyWidgets",  # dashboard
 # Attach libraries
 invisible(suppressMessages(lapply(libs, library, character.only = T)))
 
+# Color Palette
+cPal = c('#005B5B','#007979','#009797','#17AEAE','#2EB6B6','#45BEBE','#5CC6C6',
+         '#73CECE','#8BD6D6','#A2DEDE','#B9E6E6','#D0EEEE','#E7F6F6')
+
 # Data 
 # -------------------------------------------------------------------
 
@@ -267,20 +271,11 @@ server = function(input, output) {
     
     # Leaflet maps 
     observe({
-        # leafletProxy("map", data = crimeInput()) %>%
-        #     clearMarkers() %>%
-        #     addCircleMarkers(lng         =~ longitude,
-        #                      lat         =~ latitude,
-        #                      fillOpacity = 1,
-        #                      color       = "#00A6A6",
-        #                      radius      = 4,
-        #                      stroke      = T)
-        
         if (input$input0 == "Markers"){
             leafletProxy("map", data = crimeInput()) %>%
-                clearMarkers() %>%
                 clearGroup(group = "marker") %>%
                 clearGroup(group = "chloropleth") %>%
+                clearControls() %>%
                 addCircleMarkers(lng         =~ longitude,
                                  lat         =~ latitude,
                                  fillOpacity = 1,
@@ -289,32 +284,48 @@ server = function(input, output) {
                                  stroke      = T,
                                  group       = "marker")
         } else {
-            temp = 
-                crimeInput() %>%
-                group_by(district) %>%
-                dplyr::summarise(n = n()) %>%
-                dplyr::rename(dist_num = district)
-
-            map      = sh_distr
-            map@data = plyr::join(map@data, temp, by = "dist_num")
-            map@data
-
-            dom = map$n
-            bin = sort(unique(dom))
-            pal = colorBin("Reds", domain = dom, bins = bin, na.color = 'transparent')
-
-            leafletProxy("map", data = map) %>%
-                clearMarkers() %>%
-                clearGroup(group = "marker") %>%
-                clearGroup(group = "chloropleth") %>%
-                addPolygons(stroke = T,
-                            smoothFactor = 0.2,
-                            fillOpacity = 0.7,
-                            fillColor =~ pal(dom),
-                            color = "white",
-                            weight = 0.3,
-                            popup =~ paste("Number of crimes:",n),
-                            group = "chloropleth")
+            if (nrow(crimeInput()) > 0) {
+                temp = 
+                    crimeInput() %>%
+                    group_by(district) %>%
+                    dplyr::summarise(n = n()) %>%
+                    dplyr::rename(dist_num = district)
+                
+                map      = sh_distr
+                map@data = plyr::join(map@data, temp, by = "dist_num")
+                map@data
+                
+                dom  = map$n
+                bin  = sort(unique(dom))
+                
+                if (length(bin) == 1) {
+                    bin = c(0, bin)
+                }
+                
+                pal  = colorBin(rev(cPal), domain = dom, bins = bin, na.color = 'transparent')
+                
+                leafletProxy("map", data = map) %>%
+                    clearGroup(group = "marker") %>%
+                    clearGroup(group = "chloropleth") %>%
+                    clearControls() %>%
+                    addPolygons(stroke = T,
+                                fillOpacity = 0.7,
+                                fillColor =~ pal(dom),
+                                color = "white",
+                                weight = 0.3,
+                                popup =~ paste("Number of crimes:",n),
+                                group = "chloropleth") %>%
+                    addLegend(title    = '',
+                              pal      = pal,
+                              values   =~ n, 
+                              na.label = '',
+                              position = 'topleft')
+            } else {
+                leafletProxy("map", data = crimeInput()) %>%
+                    clearGroup(group = "marker") %>%
+                    clearGroup(group = "chloropleth") %>%
+                    clearControls()
+            }
         }
     })
     
@@ -383,7 +394,9 @@ server = function(input, output) {
             
             plot_ly(x    =~ n,
                     y    =~ arrest,
-                    type = 'bar', 
+                    type = 'bar',
+                    color = I('#E4572E'),
+                    alpha = 0.7, 
                     orientation = 'h') %>%
             
             layout(xaxis         = list(title = ''),
@@ -405,6 +418,8 @@ server = function(input, output) {
             plot_ly(x    =~ n,
                     y    =~ domestic,
                     type = 'bar',
+                    color = I('#76B041'),
+                    alpha = 0.7,
                     orientation = 'h') %>%
             
             layout(xaxis         = list(title = ''),
