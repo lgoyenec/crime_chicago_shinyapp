@@ -6,7 +6,7 @@
 # Libraries
 # -------------------------------------------------------------------
 
-# Define libraries
+# Define libraries with its utility
 libs = c("shiny", "shinythemes", "shinydashboard", "shinyWidgets",  # dashboard
          "leaflet", "leaflet.extras", "leaflet.minicharts",         # leaflet maps
          "httr", "jsonlite",                                        # read json
@@ -21,15 +21,13 @@ libs = c("shiny", "shinythemes", "shinydashboard", "shinyWidgets",  # dashboard
 # Attach libraries
 invisible(suppressMessages(lapply(libs, library, character.only = T)))
 
-# Color Palette
-cPal = c('#005B5B','#007979','#009797','#17AEAE','#2EB6B6','#45BEBE','#5CC6C6',
-         '#73CECE','#8BD6D6','#A2DEDE','#B9E6E6','#D0EEEE','#E7F6F6')
-
 # Data 
 # -------------------------------------------------------------------
 
 # City of Chicago
     # Import data API
+    # The API allows us to query maximum 1,000 crimes
+    # The following dataset have the 1,000 most recent crimes in Chicago
     url  = 'https://data.cityofchicago.org/resource/w98m-zvie.json'
     req  = GET(URLencode(url))
     cont = content(req, 'text')
@@ -71,6 +69,7 @@ cPal = c('#005B5B','#007979','#009797','#17AEAE','#2EB6B6','#45BEBE','#5CC6C6',
                   'PUBLIC PEACE VIOLATION')) %>%
         
         # Generate categorical variable for chosen types
+        # This makes easier the manipulation reactive inputs in shiny
         mutate(
             crime_type = 
                 ifelse(primary_type == "THEFT",             1, 
@@ -99,24 +98,43 @@ cPal = c('#005B5B','#007979','#009797','#17AEAE','#2EB6B6','#45BEBE','#5CC6C6',
 # Other
 # -------------------------------------------------------------------
 
-# Changes in absolutePanel:
-absPanel1 = '#panelOpts  {background-color: rgba(255,255,255, 0.7); padding: 0 20px 20px 20px;}'
-absPanel2 = '#graphsOpts {background-color: rgba(255,255,255, 0.7); padding: 0 20px 20px 20px;}'
+    # Changes in absolutePanel:
+    # For both absolute panel the default color of the background is white
+    # With this code, the background is between white and transparent
+    absPanel1 = '#panelOpts  {background-color: rgba(255,255,255, 0.7); padding: 0 20px 20px 20px;}'
+    absPanel2 = '#graphsOpts {background-color: rgba(255,255,255, 0.7); padding: 0 20px 20px 20px;}'
+    
+    # Color Palette
+    # Generate personlize palette for the choropleth map
+    cPal = c('#005B5B','#007979','#009797','#17AEAE','#2EB6B6','#45BEBE','#5CC6C6',
+             '#73CECE','#8BD6D6','#A2DEDE','#B9E6E6','#D0EEEE','#E7F6F6')
 
 # User interface 
 # -------------------------------------------------------------------
 ui = navbarPage(
+    # Name of the app
     "Crimes in Chicago 2019", 
     id = "nav",
+    
+    # Theme
     theme = shinytheme("flatly"),
+    
+    # Create different tabs
     tabPanel(
-        # Interactive Map Options
+        
+        # Interactive Map & Graphs
+        #------------------------------------------------------------
         "Interactive Map",
+        
+        # Leaflet map 
         
         leafletOutput("map", width = "100%", height = 800),
         
-        # Draggable Panel with interactive graphs
+        # Interactive graphs
+        # Draggable Panel with the graphs
         absolutePanel(
+            
+            # Define options of absolute panel
             id        = "graphsOpts",
             class     = "panel panel-default",
             draggable = T,
@@ -128,24 +146,34 @@ ui = navbarPage(
             
             # Title for absolute panel
             h3(strong("Interactive Graphs")),
+            h6(strong("Data:"),"1,000 most recent crimes in Chicago"),
+            h6(strong("Source"), "City of Chicago - Data Portal"),
+            
+            br(),
             
             # Interactive plots 
-            h5(strong("Density distribution of hour of crime")),
+            # Distribution of crimes across the day
+            h5(strong("Distribution of crimes across day hours")),
             h6(strong("Comparison against total crimes")),
             plotlyOutput("plot1", height = 170),
             
             br(),
             
+            # Number of arrests
             h5(strong("Number of arrests")),
             plotlyOutput("plot2", height = 120),
             
+            # Number of domestic crimes
             h5(strong("Number of domestic crimes")),
             plotlyOutput("plot3", height = 120),
             
+            # With the following code we're applying the changes in absolutePanel 
+            # The options are in line 103
             fluidPage(tags$head(tags$style(HTML(absPanel2))))
         ),
         
-        # Draggable Panel with input options and interactive plots
+        # Input options
+        # Draggable Panel with input options
         absolutePanel(
             
             # Define options of absolute panel
@@ -164,11 +192,11 @@ ui = navbarPage(
             # Input options
             # Analysis type
             radioButtons("input0",
-                         h5(strong("Type of Analysis:")),
+                         h5(strong("Choose type of analysis:")),
                          choices  = c("Markers","Polygons"),
                          selected = "Markers"),
             
-            # Crime type
+            # Crime type among the ones selected previously
             radioButtons("input1", 
                          h5(strong("Crime type")), 
                          choices = 
@@ -181,36 +209,49 @@ ui = navbarPage(
                          selected = 1),
             br(),
             
-            # Show only crimes with an arrest
+            # Checkbox: Show only crimes with an arrest
             checkboxInput("input2", 
                           strong("Show only crimes with an arrest"), 
                           value = F),
             
-            # Show only domestic crimes
+            # Checkbox: Show only domestic crimes
             checkboxInput("input3",
                          strong("Show only domestic crimes"),
                          value = F),
             
             br(),
             
-            # Interactive value box
+            # Interactive value boxes
+            # Number of crimes per selected crime
             fluidRow(useShinydashboard(),
                      tags$head(tags$style(HTML(".small-box {height: 90px}"))),
                      valueBoxOutput("vb1", width = 12)),
             
+            # Number of total crimes in Chicago
             fluidRow(useShinydashboard(),
                      tags$head(tags$style(HTML(".small-box {height: 90px}"))),
                      valueBoxOutput("vb2", width = 12)),
             
+            # With the following code we're applying the changes in absolutePanel 
+            # The options are in line 102
             fluidPage(tags$head(tags$style(HTML(absPanel1))))
         )
     ),
     tabPanel(
+        
+        # Data explorer
+        #------------------------------------------------------------
         "Data explorer",
+        
+        # Title
         h5(strong(paste("Recent crimes in Chicago 2019"))),
         hr(),
+        
+        # Data table output
         DT::dataTableOutput("table1"),
         hr(),
+        
+        # Download Handler
         h5(strong("Download data:")),
         downloadButton('downloadData',"Download data"), 
         hr()
@@ -226,41 +267,57 @@ server = function(input, output) {
     # ---------------------------------------------------------------
     
     # Base map
+    # ---------------------------------------------------------------
     output$map = renderLeaflet({
         leaflet() %>% 
-        
+            
+            # Set view in area of interest
             setView(lng  = -87.47, 
                     lat  = 41.83, 
                     zoom = 11) %>%
             
+            # Add base maps 
             addProviderTiles("CartoDB.DarkMatterNoLabels"     , group = "World Dark") %>% 
             addProviderTiles(provider = "Esri.WorldGrayCanvas", group = "World Gray") %>%
             
+            # Add polygons for districts in Chicago
             addPolygons(data   = sh_distr, 
                         color  = "#878B8E",
                         fill   = F, 
                         weight = 1.5) %>%
             
+            # Add layers control
             addLayersControl(
                 baseGroups = c("World Dark","World Gray"),
                 position   = "bottomleft")
     })
     
-    # Data filter
+    # Data filter base on inputs
+    # ---------------------------------------------------------------
     crimeInput = reactive({
+        # Subset data as `crime`
         crime = 
             df %>%
+            
+            # Filter crime of interest
             filter(!is.na(latitude),
                    crime_type == input$input1) %>%
+            
+            # Transform crime name to sentence case
             mutate(primary_type = str_to_sentence(primary_type))
         
+        # Subset again base on two additional filters
         if (input$input2 == T){
+            
+            # Subset those crimes that ended up in an arrest
             crime = 
                 crime %>% 
                 filter(arrest == T)
         }
         
         if (input$input3 == T){
+            
+            # Subset those crimes classified as domestic crimes
             crime = 
                 crime %>% 
                 filter(domestic == T)
@@ -270,12 +327,23 @@ server = function(input, output) {
     })
     
     # Leaflet maps 
+    # ---------------------------------------------------------------
+    # Based on crimeInput() we're generating two types of maps
+    # 1. Markers: points of crimes across the city
+    # 2. Choropleth: number of crimes per district
+    
     observe({
+        
+        # Markers map
+        # -----------------------------------------------------------
         if (input$input0 == "Markers"){
+            
             leafletProxy("map", data = crimeInput()) %>%
+                
                 clearGroup(group = "marker") %>%
                 clearGroup(group = "chloropleth") %>%
                 clearControls() %>%
+                
                 addCircleMarkers(lng         =~ longitude,
                                  lat         =~ latitude,
                                  fillOpacity = 1,
@@ -283,45 +351,63 @@ server = function(input, output) {
                                  radius      = 4,
                                  stroke      = T,
                                  group       = "marker")
+        # Choropleth map
+        # -----------------------------------------------------------
         } else {
             if (nrow(crimeInput()) > 0) {
+                
+                # Temporal data with number of crimes per district
                 temp = 
                     crimeInput() %>%
                     group_by(district) %>%
                     dplyr::summarise(n = n()) %>%
                     dplyr::rename(dist_num = district)
                 
+                # Merge `temp` data with shapefile district
                 map      = sh_distr
                 map@data = plyr::join(map@data, temp, by = "dist_num")
                 map@data
                 
+                # Create bins for choropleth map
                 dom  = map$n
                 bin  = sort(unique(dom))
                 
-                if (length(bin) == 1) {
-                    bin = c(0, bin)
-                }
+                    # For one of the selections, the number of bins is 1
+                    # bin length has to be at least 2
+                    if (length(bin) == 1) {
+                        bin = c(0, bin)
+                    }
                 
+                # Create and match color palette with bins
                 pal  = colorBin(rev(cPal), domain = dom, bins = bin, na.color = 'transparent')
                 
+                # Choropleth map
                 leafletProxy("map", data = map) %>%
+                    
                     clearGroup(group = "marker") %>%
                     clearGroup(group = "chloropleth") %>%
                     clearControls() %>%
-                    addPolygons(stroke = T,
+                    
+                    addPolygons(stroke      = T,
                                 fillOpacity = 0.7,
-                                fillColor =~ pal(dom),
-                                color = "white",
-                                weight = 0.3,
-                                popup =~ paste("Number of crimes:",n),
-                                group = "chloropleth") %>%
+                                fillColor   =~ pal(dom),
+                                color       = "white",
+                                weight      = 0.3,
+                                popup       =~ paste("Number of crimes:",n),
+                                group       = "chloropleth") %>%
+                    
                     addLegend(title    = '',
                               pal      = pal,
                               values   =~ n, 
                               na.label = '',
                               position = 'topleft')
+                
+            # Default map
+            # When there's no onservations in the data
+                
             } else {
                 leafletProxy("map", data = crimeInput()) %>%
+                    
                     clearGroup(group = "marker") %>%
                     clearGroup(group = "chloropleth") %>%
                     clearControls()
@@ -330,6 +416,10 @@ server = function(input, output) {
     })
     
     # Value box 
+    # ---------------------------------------------------------------
+    
+    # Number of crimes for selected crime in input
+    # ---------------------------------------------------------------
     output$vb1 = renderValueBox({
         value = 
             crimeInput() %>% 
@@ -348,6 +438,8 @@ server = function(input, output) {
                  color    = "blue")
     })
     
+    # Total number of crimes
+    # ---------------------------------------------------------------
     output$vb2 = renderValueBox({
         value = 
             df %>% 
@@ -362,7 +454,8 @@ server = function(input, output) {
     # Tab - Statistics
     # ---------------------------------------------------------------
     
-    # Plot 1
+    # Plot 1: Distribution of crimes across day hours
+    # ---------------------------------------------------------------
     output$plot1 = renderPlotly({
         plot_ly(alpha = 0.6) %>%
         
@@ -383,7 +476,9 @@ server = function(input, output) {
                margin        = list(l = 0, r = 0, b = 0, t = 0, pad = 0))
     })
     
-    # Plot 2
+    # Plot 2: Bar plot of arrests
+    # Number of crimes of selected crime that ended up in a arrest
+    # ---------------------------------------------------------------
     output$plot2 = renderPlotly({
         df %>%
             filter(!is.na(latitude),
@@ -406,7 +501,9 @@ server = function(input, output) {
                    margin        = list(l = 0, r = 0, b = 0, t = 0, pad = 0))
     })
     
-    # Plot 3
+    # Plot 3: Bar plot of domestic crimes
+    # number of crimes of selected crime that were classified as domestic
+    # ---------------------------------------------------------------
     output$plot3 = renderPlotly({
         df %>%
             filter(!is.na(latitude),
@@ -433,6 +530,7 @@ server = function(input, output) {
     # ---------------------------------------------------------------
     
     # Data table
+    # ---------------------------------------------------------------
     output$table1 = DT::renderDataTable({
         DT::datatable(df,
                       options = list(pageLength = 10), 
@@ -440,6 +538,7 @@ server = function(input, output) {
     })
     
     # Download
+    # ---------------------------------------------------------------
     output$downloadData = downloadHandler(
         filename = function() {paste("data-", Sys.Date(), ".csv", sep = "")},
         content  = function(file) {write.csv(df,file)}
