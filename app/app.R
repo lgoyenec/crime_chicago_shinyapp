@@ -6,20 +6,23 @@
 # Libraries
 # -------------------------------------------------------------------
 
-# Define libraries with its utility
-libs = c("shiny", "shinythemes", "shinydashboard", "shinyWidgets",  # dashboard
-         "leaflet", "leaflet.extras", "leaflet.minicharts",         # leaflet maps
-         "httr", "jsonlite",                                        # read json
-         "readxl",                                                  # read csv 
-         "rgdal",                                                   # read shapefiles
-         "lubridate",                                               # transform dates
-         "stringr",                                                 # string case: upper, lower, title
-         "DT",                                                      # render data frames
-         "plotly",                                                  # interactive viz 
-         "plyr")                                                    # easy merge                                                  
-
-# Attach libraries
-invisible(suppressMessages(lapply(libs, library, character.only = T)))
+# Install library directly 
+library(shiny)
+library(shinythemes)
+library(shinydashboard)
+library(shinyWidgets)
+library(leaflet)
+library(leaflet.extras)
+library(leaflet.minicharts)
+library(httr)
+library(jsonlite)
+library(readxl)
+library(rgdal)
+library(lubridate)
+library(stringr)
+library(DT)
+library(plotly)
+library(plyr)
 
 # Data 
 # -------------------------------------------------------------------

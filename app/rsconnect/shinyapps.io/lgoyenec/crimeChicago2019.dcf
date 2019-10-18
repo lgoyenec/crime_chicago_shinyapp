@@ -1,0 +1,12 @@
+name: crimeChicago2019
+title: crimeChicago2019
+username:
+account: lgoyenec
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1350417
+bundleId: 2512980
+url: https://lgoyenec.shinyapps.io/crimeChicago2019/
+when: 1571437659.48844
+asMultiple: FALSE
+asStatic: FALSE
