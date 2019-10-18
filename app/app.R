@@ -15,7 +15,8 @@ libs = c("shiny", "shinythemes", "shinydashboard", "shinyWidgets",  # dashboard
          "lubridate",                                               # transform dates
          "stringr",                                                 # string case: upper, lower, title
          "DT",                                                      # render data frames
-         "plotly")                                                  # interactive viz 
+         "plotly",                                                  # interactive viz 
+         "plyr")                                                    # easy merge                                                  
 
 # Attach libraries
 invisible(suppressMessages(lapply(libs, library, character.only = T)))
@@ -107,7 +108,8 @@ ui = navbarPage(
     tabPanel(
         # Interactive Map Options
         "Interactive Map",
-        leafletOutput("map", width = "100%", height = 790),
+        
+        leafletOutput("map", width = "100%", height = 800),
         
         # Draggable Panel with interactive graphs
         absolutePanel(
@@ -118,11 +120,10 @@ ui = navbarPage(
             bottom    = "auto",
             left      = "auto", 
             right     = 350,
-            width     = 310, height = "80%",
+            width     = 310, height = "85%",
             
             # Title for absolute panel
             h3(strong("Interactive Graphs")),
-            br(),
             
             # Interactive plots 
             h5(strong("Density distribution of hour of crime")),
@@ -131,10 +132,10 @@ ui = navbarPage(
             
             br(),
             
-            h5(strong("Proportion of arrests")),
+            h5(strong("Number of arrests")),
             plotlyOutput("plot2", height = 120),
             
-            h5(strong("Proportion of domestic crimes")),
+            h5(strong("Number of domestic crimes")),
             plotlyOutput("plot3", height = 120),
             
             fluidPage(tags$head(tags$style(HTML(absPanel2))))
@@ -151,16 +152,21 @@ ui = navbarPage(
             bottom    = "auto",
             left      = "auto", 
             right     = 30,
-            width     = 310, height = "80%",
+            width     = 310, height = "85%",
             
             # Title for absolute panel
             h3(strong("Interactive Options")),
-            br(),
             
             # Input options
+            # Analysis type
+            radioButtons("input0",
+                         h5(strong("Type of Analysis:")),
+                         choices  = c("Markers","Polygons"),
+                         selected = "Markers"),
+            
             # Crime type
             radioButtons("input1", 
-                         h4(strong("Crime type")), 
+                         h5(strong("Crime type")), 
                          choices = 
                              c('Theft'                  = 1,
                                'Assault'                = 2,
@@ -169,7 +175,6 @@ ui = navbarPage(
                                'Weapons violation'      = 5,
                                'Public peace violation' = 6), 
                          selected = 1),
-            
             br(),
             
             # Show only crimes with an arrest
@@ -182,13 +187,15 @@ ui = navbarPage(
                          strong("Show only domestic crimes"),
                          value = F),
             
+            br(),
+            
             # Interactive value box
             fluidRow(useShinydashboard(),
-                     tags$head(tags$style(HTML(".small-box {height: 100px}"))),
+                     tags$head(tags$style(HTML(".small-box {height: 90px}"))),
                      valueBoxOutput("vb1", width = 12)),
             
             fluidRow(useShinydashboard(),
-                     tags$head(tags$style(HTML(".small-box {height: 100px}"))),
+                     tags$head(tags$style(HTML(".small-box {height: 90px}"))),
                      valueBoxOutput("vb2", width = 12)),
             
             fluidPage(tags$head(tags$style(HTML(absPanel1))))
@@ -260,21 +267,62 @@ server = function(input, output) {
     
     # Leaflet maps 
     observe({
-        leafletProxy("map", data = crimeInput()) %>%
-            clearMarkers() %>% 
-            addCircleMarkers(lng         =~ longitude, 
-                             lat         =~ latitude, 
-                             fillOpacity = 1, 
-                             color       = "#00A6A6", 
-                             radius      = 4, 
-                             stroke      = T)
+        # leafletProxy("map", data = crimeInput()) %>%
+        #     clearMarkers() %>%
+        #     addCircleMarkers(lng         =~ longitude,
+        #                      lat         =~ latitude,
+        #                      fillOpacity = 1,
+        #                      color       = "#00A6A6",
+        #                      radius      = 4,
+        #                      stroke      = T)
+        
+        if (input$input0 == "Markers"){
+            leafletProxy("map", data = crimeInput()) %>%
+                clearMarkers() %>%
+                clearGroup(group = "marker") %>%
+                clearGroup(group = "chloropleth") %>%
+                addCircleMarkers(lng         =~ longitude,
+                                 lat         =~ latitude,
+                                 fillOpacity = 1,
+                                 color       = "#00A6A6",
+                                 radius      = 4,
+                                 stroke      = T,
+                                 group       = "marker")
+        } else {
+            temp = 
+                crimeInput() %>%
+                group_by(district) %>%
+                dplyr::summarise(n = n()) %>%
+                dplyr::rename(dist_num = district)
+
+            map      = sh_distr
+            map@data = plyr::join(map@data, temp, by = "dist_num")
+            map@data
+
+            dom = map$n
+            bin = sort(unique(dom))
+            pal = colorBin("Reds", domain = dom, bins = bin, na.color = 'transparent')
+
+            leafletProxy("map", data = map) %>%
+                clearMarkers() %>%
+                clearGroup(group = "marker") %>%
+                clearGroup(group = "chloropleth") %>%
+                addPolygons(stroke = T,
+                            smoothFactor = 0.2,
+                            fillOpacity = 0.7,
+                            fillColor =~ pal(dom),
+                            color = "white",
+                            weight = 0.3,
+                            popup =~ paste("Number of crimes:",n),
+                            group = "chloropleth")
+        }
     })
     
     # Value box 
     output$vb1 = renderValueBox({
         value = 
             crimeInput() %>% 
-            summarise(n = n()) %>% 
+            dplyr::summarise(n = n()) %>% 
             as.numeric()
         
         text  = 
@@ -292,7 +340,7 @@ server = function(input, output) {
     output$vb2 = renderValueBox({
         value = 
             df %>% 
-            summarise(n = n()) %>% 
+            dplyr::summarise(n = n()) %>% 
             as.numeric()
         
         valueBox(paste(value), 
@@ -330,7 +378,7 @@ server = function(input, output) {
             filter(!is.na(latitude),
                    crime_type == input$input1) %>%
             group_by(arrest) %>%
-            summarise(n = n()) %>%
+            dplyr::summarise(n = n()) %>%
             mutate(arrest = ifelse(arrest == T, "Yes", "No")) %>%
             
             plot_ly(x    =~ n,
@@ -338,7 +386,8 @@ server = function(input, output) {
                     type = 'bar', 
                     orientation = 'h') %>%
             
-            layout(yaxis         = list(title = ''),
+            layout(xaxis         = list(title = ''),
+                   yaxis         = list(title = ''),
                    plot_bgcolor  = 'transparent',
                    paper_bgcolor = 'transparent',
                    margin        = list(l = 0, r = 0, b = 0, t = 0, pad = 0))
@@ -350,7 +399,7 @@ server = function(input, output) {
             filter(!is.na(latitude),
                    crime_type == input$input1) %>%
             group_by(domestic) %>%
-            summarise(n = n()) %>%
+            dplyr::summarise(n = n()) %>%
             mutate(domestic = ifelse(domestic == T, "Yes", "No")) %>%
             
             plot_ly(x    =~ n,
@@ -358,7 +407,8 @@ server = function(input, output) {
                     type = 'bar',
                     orientation = 'h') %>%
             
-            layout(yaxis         = list(title = ''),
+            layout(xaxis         = list(title = ''),
+                   yaxis         = list(title = ''),
                    plot_bgcolor  = 'transparent',
                    paper_bgcolor = 'transparent',
                    margin        = list(l = 0, r = 0, b = 0, t = 0, pad = 0))
