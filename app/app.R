@@ -12,6 +12,7 @@ libs = c("shiny", "shinythemes", "shinydashboard", "shinyWidgets",  # dashboard
          "httr", "jsonlite",                                        # read json
          "readxl",                                                  # read csv 
          "rgdal",                                                   # read shapefiles
+         "lubridate",                                               # transform dates
          "stringr",                                                 # string case: upper, lower, title
          "DT",                                                      # render data frames
          "plotly")                                                  # interactive viz 
@@ -44,9 +45,15 @@ invisible(suppressMessages(lapply(libs, library, character.only = T)))
         
         # District as numeric
         # `lon` and `lat` as numeric
+        # `date` as datetime
+        # Create month, day and hour of the day 
         mutate(district  = as.numeric(district),
                latitude  = as.numeric(latitude),
-               longitude = as.numeric(longitude)) %>%
+               longitude = as.numeric(longitude),
+               date      = as_datetime(date),
+               month     = month(date),
+               day       = day(date),
+               hour      = hour(date)) %>%
         
         # Select primary type of crimes for maps
         filter(
@@ -88,7 +95,8 @@ invisible(suppressMessages(lapply(libs, library, character.only = T)))
 # -------------------------------------------------------------------
 
 # Changes in absolutePanel:
-absPanel = '#panelOpts {background-color: rgba(255,255,255, 0.7); padding: 0 20px 20px 20px;}'
+absPanel1 = '#panelOpts  {background-color: rgba(255,255,255, 0.7); padding: 0 20px 20px 20px;}'
+absPanel2 = '#graphsOpts {background-color: rgba(255,255,255, 0.7); padding: 0 20px 20px 20px;}'
 
 # User interface 
 # -------------------------------------------------------------------
@@ -100,6 +108,37 @@ ui = navbarPage(
         # Interactive Map Options
         "Interactive Map",
         leafletOutput("map", width = "100%", height = 790),
+        
+        # Draggable Panel with interactive graphs
+        absolutePanel(
+            id        = "graphsOpts",
+            class     = "panel panel-default",
+            draggable = T,
+            top       = 100, 
+            bottom    = "auto",
+            left      = "auto", 
+            right     = 350,
+            width     = 310, height = "80%",
+            
+            # Title for absolute panel
+            h3(strong("Interactive Graphs")),
+            br(),
+            
+            # Interactive plots 
+            h5(strong("Density distribution of hour of crime")),
+            h6(strong("Comparison against total crimes")),
+            plotlyOutput("plot1", height = 170),
+            
+            br(),
+            
+            h5(strong("Proportion of arrests")),
+            plotlyOutput("plot2", height = 120),
+            
+            h5(strong("Proportion of domestic crimes")),
+            plotlyOutput("plot3", height = 120),
+            
+            fluidPage(tags$head(tags$style(HTML(absPanel2))))
+        ),
         
         # Draggable Panel with input options and interactive plots
         absolutePanel(
@@ -115,7 +154,7 @@ ui = navbarPage(
             width     = 310, height = "80%",
             
             # Title for absolute panel
-            h3(strong("Interactive Map")),
+            h3(strong("Interactive Options")),
             br(),
             
             # Input options
@@ -136,14 +175,12 @@ ui = navbarPage(
             # Show only crimes with an arrest
             checkboxInput("input2", 
                           strong("Show only crimes with an arrest"), 
-                          value = T),
+                          value = F),
             
             # Show only domestic crimes
             checkboxInput("input3",
                          strong("Show only domestic crimes"),
-                         value = T),
-            
-            br(),
+                         value = F),
             
             # Interactive value box
             fluidRow(useShinydashboard(),
@@ -154,12 +191,8 @@ ui = navbarPage(
                      tags$head(tags$style(HTML(".small-box {height: 100px}"))),
                      valueBoxOutput("vb2", width = 12)),
             
-            fluidPage(tags$head(tags$style(HTML(absPanel))))
+            fluidPage(tags$head(tags$style(HTML(absPanel1))))
         )
-    ),
-    tabPanel(
-        "Statistics",
-        plotlyOutput("plot1", height = 200)
     ),
     tabPanel(
         "Data explorer",
@@ -167,7 +200,7 @@ ui = navbarPage(
         hr(),
         DT::dataTableOutput("table1"),
         hr(),
-        h5(strong("Download data for selected variable:")),
+        h5(strong("Download data:")),
         downloadButton('downloadData',"Download data"), 
         hr()
     )
@@ -184,8 +217,10 @@ server = function(input, output) {
     # Base map
     output$map = renderLeaflet({
         leaflet() %>% 
-            
-            setView(lng = -87.70, lat = 41.82, zoom = 11) %>%
+        
+            setView(lng  = -87.47, 
+                    lat  = 41.83, 
+                    zoom = 11) %>%
             
             addProviderTiles("CartoDB.DarkMatterNoLabels"     , group = "World Dark") %>% 
             addProviderTiles(provider = "Esri.WorldGrayCanvas", group = "World Gray") %>%
@@ -205,7 +240,21 @@ server = function(input, output) {
         crime = 
             df %>%
             filter(!is.na(latitude),
-                   crime_type == input$input1)
+                   crime_type == input$input1) %>%
+            mutate(primary_type = str_to_sentence(primary_type))
+        
+        if (input$input2 == T){
+            crime = 
+                crime %>% 
+                filter(arrest == T)
+        }
+        
+        if (input$input3 == T){
+            crime = 
+                crime %>% 
+                filter(domestic == T)
+        }
+        
         return(crime)
     })
     
@@ -223,14 +272,32 @@ server = function(input, output) {
     
     # Value box 
     output$vb1 = renderValueBox({
-        value = crimeInput() %>% summarise(n = n()) %>% as.numeric()
-        text  = crimeInput() %>% select(primary_type) %>% unique() %>% as.character() %>% str_to_sentence()
-        valueBox(paste(value), subtitle = paste(text, "crimes"), color = "teal")
+        value = 
+            crimeInput() %>% 
+            summarise(n = n()) %>% 
+            as.numeric()
+        
+        text  = 
+            df %>% 
+            filter(crime_type == input$input1) %>% 
+            select(primary_type) %>% 
+            unique() %>% 
+            str_to_sentence()
+        
+        valueBox(paste(value), 
+                 subtitle = paste(text, "crimes"), 
+                 color    = "blue")
     })
     
     output$vb2 = renderValueBox({
-        value = df %>% summarise(n = n()) %>% as.numeric()
-        valueBox(paste(value), subtitle = "Total crimes", color = "yellow")
+        value = 
+            df %>% 
+            summarise(n = n()) %>% 
+            as.numeric()
+        
+        valueBox(paste(value), 
+                 subtitle = "Total crimes", 
+                 color    = "yellow")
     })
     
     # Tab - Statistics
@@ -238,10 +305,63 @@ server = function(input, output) {
     
     # Plot 1
     output$plot1 = renderPlotly({
+        plot_ly(alpha = 0.6) %>%
+        
+        add_histogram(data = df,
+                      x    =~ hour,
+                      name = 'Total') %>%
+            
+        add_histogram(data  = crimeInput(),
+                      x     =~ hour, 
+                      color = I('#4DFFF3'),
+                      name  = unique(crimeInput()['primary_type'])) %>%
+            
+        layout(barmode       = 'overlay',
+               legend        = list(orientation = 'h'),
+               xaxis         = list(title = ''),
+               plot_bgcolor  = 'transparent',
+               paper_bgcolor = 'transparent',
+               margin        = list(l = 0, r = 0, b = 0, t = 0, pad = 0))
     })
     
     # Plot 2
     output$plot2 = renderPlotly({
+        df %>%
+            filter(!is.na(latitude),
+                   crime_type == input$input1) %>%
+            group_by(arrest) %>%
+            summarise(n = n()) %>%
+            mutate(arrest = ifelse(arrest == T, "Yes", "No")) %>%
+            
+            plot_ly(x    =~ n,
+                    y    =~ arrest,
+                    type = 'bar', 
+                    orientation = 'h') %>%
+            
+            layout(yaxis         = list(title = ''),
+                   plot_bgcolor  = 'transparent',
+                   paper_bgcolor = 'transparent',
+                   margin        = list(l = 0, r = 0, b = 0, t = 0, pad = 0))
+    })
+    
+    # Plot 3
+    output$plot3 = renderPlotly({
+        df %>%
+            filter(!is.na(latitude),
+                   crime_type == input$input1) %>%
+            group_by(domestic) %>%
+            summarise(n = n()) %>%
+            mutate(domestic = ifelse(domestic == T, "Yes", "No")) %>%
+            
+            plot_ly(x    =~ n,
+                    y    =~ domestic,
+                    type = 'bar',
+                    orientation = 'h') %>%
+            
+            layout(yaxis         = list(title = ''),
+                   plot_bgcolor  = 'transparent',
+                   paper_bgcolor = 'transparent',
+                   margin        = list(l = 0, r = 0, b = 0, t = 0, pad = 0))
     })
     
     # Tab - Data Explorer 
@@ -249,7 +369,7 @@ server = function(input, output) {
     
     # Data table
     output$table1 = DT::renderDataTable({
-        DT::datatable(crimeInput(),
+        DT::datatable(df,
                       options = list(pageLength = 10), 
                       rownames = F)
     })
@@ -257,7 +377,7 @@ server = function(input, output) {
     # Download
     output$downloadData = downloadHandler(
         filename = function() {paste("data-", Sys.Date(), ".csv", sep = "")},
-        content  = function(file) {write.csv(crimeInput(),file)}
+        content  = function(file) {write.csv(df,file)}
     )
 }
 
